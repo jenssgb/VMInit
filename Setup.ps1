@@ -297,8 +297,7 @@ $WshShell = New-Object -ComObject WScript.Shell
 $shortcuts = @(
     @{ Name = "Outlook";  Target = "$env:ProgramFiles\Microsoft Office\root\Office16\OUTLOOK.EXE" },
     @{ Name = "Word";     Target = "$env:ProgramFiles\Microsoft Office\root\Office16\WINWORD.EXE" },
-    @{ Name = "Excel";    Target = "$env:ProgramFiles\Microsoft Office\root\Office16\EXCEL.EXE" },
-    @{ Name = "Teams";    Target = "$env:LOCALAPPDATA\Microsoft\WindowsApps\ms-teams.exe" }
+    @{ Name = "Excel";    Target = "$env:ProgramFiles\Microsoft Office\root\Office16\EXCEL.EXE" }
 )
 
 foreach ($s in $shortcuts) {
@@ -309,6 +308,35 @@ foreach ($s in $shortcuts) {
         Write-Host "  $($s.Name) shortcut created." -ForegroundColor DarkGray
     } else {
         Write-Host "  $($s.Name) not found at $($s.Target) - skipping shortcut." -ForegroundColor DarkGray
+    }
+}
+
+# Teams shortcut: copy from Start Menu (MSIX app has proper icon there)
+$teamsStartMenu = Get-ChildItem "$env:ProgramData\Microsoft\Windows\Start Menu\Programs" -Filter "*Teams*" -Recurse -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if (-not $teamsStartMenu) {
+    # Also check user Start Menu
+    $teamsStartMenu = Get-ChildItem "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Filter "*Teams*" -Recurse -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+}
+if ($teamsStartMenu) {
+    Copy-Item $teamsStartMenu.FullName "$publicDesktop\Microsoft Teams.lnk" -Force
+    Write-Host "  Teams shortcut created (with icon)." -ForegroundColor DarkGray
+} else {
+    # Fallback: create shortcut via AppUserModelID (shell:AppsFolder)
+    $teamsPkg = Get-AppxPackage -Name "MSTeams" -AllUsers -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($teamsPkg) {
+        $aumid = "$($teamsPkg.PackageFamilyName)!MSTeams"
+        $lnk = $WshShell.CreateShortcut("$publicDesktop\Microsoft Teams.lnk")
+        $lnk.TargetPath = "explorer.exe"
+        $lnk.Arguments = "shell:AppsFolder\$aumid"
+        # Find icon from package install location
+        $teamsIcon = Get-ChildItem "$($teamsPkg.InstallLocation)" -Filter "*.ico" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($teamsIcon) { $lnk.IconLocation = $teamsIcon.FullName }
+        $lnk.Save()
+        Write-Host "  Teams shortcut created." -ForegroundColor DarkGray
+    } else {
+        Write-Host "  Teams not found - skipping shortcut." -ForegroundColor DarkGray
     }
 }
 
