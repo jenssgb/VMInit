@@ -9,9 +9,10 @@ Automated setup script for fresh Windows 11 Lab VMs.
 3. **Cleans desktop** – Removes shortcuts, solid gray wallpaper, taskbar cleanup (Widgets/Chat/Search/Task View weg), Windows-Tipps deaktiviert
 4. **Installs Microsoft 365 Apps** – Full Office suite (Word, Excel, PowerPoint, Outlook, OneNote, Access, Publisher) via ODT, German + English
 5. **Installs Microsoft Teams** – New Teams v2.0, always latest version via official bootstrapper
-6. **Desktop shortcuts** – New Outlook, Word, Excel, Teams, OneDrive, M365 Copilot auf dem Desktop (mit korrekten Icons)
-7. **Installs dev tools** – VS Code, Git, PowerShell 7, Windows Terminal (via winget)
-8. **Refreshes Explorer & Restart** – Applies all changes, then prompts to restart
+6. **Ensures MSIX apps** – Installs New Outlook & M365 Copilot from Microsoft Store if missing
+7. **Desktop shortcuts** – New Outlook, Word, Excel, Teams, OneDrive, M365 Copilot auf dem Desktop (mit korrekten Icons)
+8. **Installs dev tools** – VS Code, Git, PowerShell 7, Windows Terminal (via winget)
+9. **Refreshes Explorer & Restart** – Applies all changes, then prompts to restart
 
 ## Demo-Account einrichten
 

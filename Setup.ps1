@@ -31,7 +31,7 @@ Write-Host "  VMInit - Windows 11 Lab VM Setup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-$steps = 8
+$steps = 9
 
 # ──────────────────────────────────────────────
 # 1. REMOVE BLOATWARE
@@ -287,9 +287,32 @@ if ($teamsInstalled) {
 }
 
 # ──────────────────────────────────────────────
-# 6. CREATE DESKTOP SHORTCUTS
+# 6. ENSURE MSIX APPS (New Outlook, M365 Copilot)
 # ──────────────────────────────────────────────
-Write-Host "[6/$steps] Creating desktop shortcuts..." -ForegroundColor Yellow
+Write-Host "[6/$steps] Ensuring New Outlook & M365 Copilot..." -ForegroundColor Yellow
+
+$msixRequired = @(
+    @{ Name = "New Outlook";      PkgName = "Microsoft.OutlookForWindows";  StoreId = "9NRX63209R7B" },
+    @{ Name = "M365 Copilot";     PkgName = "Microsoft.MicrosoftOfficeHub"; StoreId = "9WZDNCRD29V9" }
+)
+
+foreach ($app in $msixRequired) {
+    $installed = Get-AppxPackage -Name $app.PkgName -ErrorAction SilentlyContinue
+    if ($installed) {
+        Write-Host "  $($app.Name) already installed - skipping." -ForegroundColor DarkGray
+    } else {
+        Write-Host "  Installing $($app.Name) from Microsoft Store..." -ForegroundColor DarkGray
+        winget install --id $app.StoreId --source msstore --silent --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
+        Write-Host "  $($app.Name) installed." -ForegroundColor DarkGray
+    }
+}
+
+Write-Host "  MSIX apps ready." -ForegroundColor Green
+
+# ──────────────────────────────────────────────
+# 7. CREATE DESKTOP SHORTCUTS
+# ──────────────────────────────────────────────
+Write-Host "[7/$steps] Creating desktop shortcuts..." -ForegroundColor Yellow
 
 $publicDesktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
 $WshShell = New-Object -ComObject WScript.Shell
@@ -403,9 +426,9 @@ if (Test-Path $oneDrivePath) {
 Write-Host "  Desktop shortcuts ready." -ForegroundColor Green
 
 # ──────────────────────────────────────────────
-# 7. INSTALL DEV TOOLS (winget)
+# 8. INSTALL DEV TOOLS (winget)
 # ──────────────────────────────────────────────
-Write-Host "[7/$steps] Installing dev tools..." -ForegroundColor Yellow
+Write-Host "[8/$steps] Installing dev tools..." -ForegroundColor Yellow
 
 $wingetTools = @(
     @{ Id = "Microsoft.VisualStudioCode"; Name = "VS Code" },
@@ -428,9 +451,9 @@ foreach ($tool in $wingetTools) {
 Write-Host "  Dev tools ready." -ForegroundColor Green
 
 # ──────────────────────────────────────────────
-# 8. REFRESH EXPLORER & CLEANUP
+# 9. REFRESH EXPLORER & CLEANUP
 # ──────────────────────────────────────────────
-Write-Host "[8/$steps] Finishing up..." -ForegroundColor Yellow
+Write-Host "[9/$steps] Finishing up..." -ForegroundColor Yellow
 
 # Restart Explorer to apply taskbar & desktop changes
 Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
