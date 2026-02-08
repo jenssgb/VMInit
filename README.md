@@ -11,16 +11,15 @@ Automated setup script for fresh Windows 11 Lab VMs.
 
 ## Usage
 
-Run this **single command** in an elevated PowerShell on the fresh VM:
+Open **PowerShell** on the fresh VM and run:
 
 ```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force; irm https://raw.githubusercontent.com/jenssgb/VMInit/master/Setup.ps1 | iex
+irm https://raw.githubusercontent.com/jenssgb/VMInit/master/Setup.ps1 | iex
 ```
 
-That's it. Sit back and wait – the script handles everything automatically.
+The script auto-elevates to Administrator (UAC prompt) – no need to manually "Run as Admin".
 
 ## Requirements
 
 - Windows 11
-- Administrator privileges
 - Internet connection

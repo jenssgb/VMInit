@@ -1,4 +1,3 @@
-#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
     VMInit - Automated Windows 11 Lab VM Setup
@@ -10,8 +9,16 @@
 
 .NOTES
     Author: jenssgb
-    Requires: Administrator privileges, Internet connection
+    Requires: Internet connection (auto-elevates to Admin)
 #>
+
+# ── Auto-elevate to Administrator ──
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "Restarting as Administrator..." -ForegroundColor Yellow
+    $script = "irm https://raw.githubusercontent.com/jenssgb/VMInit/master/Setup.ps1 | iex"
+    Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command $script"
+    return
+}
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # speeds up Invoke-WebRequest dramatically
