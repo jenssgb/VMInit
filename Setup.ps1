@@ -311,33 +311,35 @@ foreach ($s in $shortcuts) {
     }
 }
 
-# Teams shortcut: copy from Start Menu (MSIX app has proper icon there)
-$teamsStartMenu = Get-ChildItem "$env:ProgramData\Microsoft\Windows\Start Menu\Programs" -Filter "*Teams*" -Recurse -ErrorAction SilentlyContinue |
-    Select-Object -First 1
-if (-not $teamsStartMenu) {
-    # Also check user Start Menu
-    $teamsStartMenu = Get-ChildItem "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Filter "*Teams*" -Recurse -ErrorAction SilentlyContinue |
-        Select-Object -First 1
+# Teams shortcut: find ms-teams.exe and use its embedded icon
+$teamsExePaths = @(
+    "$env:LOCALAPPDATA\Microsoft\WindowsApps\ms-teams.exe",
+    "$env:ProgramFiles\WindowsApps\MSTeams_*\ms-teams.exe",
+    "${env:LOCALAPPDATA}\Microsoft\Teams\current\Teams.exe"
+)
+$teamsExe = $null
+foreach ($tp in $teamsExePaths) {
+    $found = Get-Item $tp -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($found) { $teamsExe = $found.FullName; break }
 }
-if ($teamsStartMenu) {
-    Copy-Item $teamsStartMenu.FullName "$publicDesktop\Microsoft Teams.lnk" -Force
-    Write-Host "  Teams shortcut created (with icon)." -ForegroundColor DarkGray
+if (-not $teamsExe) {
+    # Search more broadly
+    $teamsExe = (Get-ChildItem "$env:ProgramFiles\WindowsApps" -Filter "ms-teams.exe" -Recurse -ErrorAction SilentlyContinue |
+        Select-Object -First 1).FullName
+}
+if ($teamsExe) {
+    $lnk = $WshShell.CreateShortcut("$publicDesktop\Microsoft Teams.lnk")
+    $lnk.TargetPath = $teamsExe
+    $lnk.IconLocation = "$teamsExe,0"
+    $lnk.Save()
+    Write-Host "  Teams shortcut created." -ForegroundColor DarkGray
 } else {
-    # Fallback: create shortcut via AppUserModelID (shell:AppsFolder)
-    $teamsPkg = Get-AppxPackage -Name "MSTeams" -AllUsers -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($teamsPkg) {
-        $aumid = "$($teamsPkg.PackageFamilyName)!MSTeams"
-        $lnk = $WshShell.CreateShortcut("$publicDesktop\Microsoft Teams.lnk")
-        $lnk.TargetPath = "explorer.exe"
-        $lnk.Arguments = "shell:AppsFolder\$aumid"
-        # Find icon from package install location
-        $teamsIcon = Get-ChildItem "$($teamsPkg.InstallLocation)" -Filter "*.ico" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($teamsIcon) { $lnk.IconLocation = $teamsIcon.FullName }
-        $lnk.Save()
-        Write-Host "  Teams shortcut created." -ForegroundColor DarkGray
-    } else {
-        Write-Host "  Teams not found - skipping shortcut." -ForegroundColor DarkGray
-    }
+    # Last resort: use URI protocol (always works, icon from shell)
+    $lnk = $WshShell.CreateShortcut("$publicDesktop\Microsoft Teams.lnk")
+    $lnk.TargetPath = "msteams:"
+    $lnk.IconLocation = "$env:SystemRoot\System32\shell32.dll,44"
+    $lnk.Save()
+    Write-Host "  Teams shortcut created (protocol handler)." -ForegroundColor DarkGray
 }
 
 # OneDrive shortcut (usually already on desktop, but ensure it)
