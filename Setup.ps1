@@ -155,13 +155,6 @@ foreach ($dp in $desktopPaths) {
 Write-Host "  Desktop shortcuts removed." -ForegroundColor DarkGray
 
 # Set wallpaper to Windows 11 "Captured Motion" (built-in, gray tones)
-Add-Type -TypeDefinition @"
-using System.Runtime.InteropServices;
-public class Wallpaper {
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
-}
-"@
 $wallpaperCandidates = @(
     "$env:SystemRoot\Web\Wallpaper\ThemeD\img32.jpg",
     "$env:SystemRoot\Web\Wallpaper\ThemeD\img33.jpg",
@@ -170,33 +163,84 @@ $wallpaperCandidates = @(
 )
 $wallpaperPath = $wallpaperCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($wallpaperPath) {
-    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallPaper" -Value $wallpaperPath
-    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value "10"  # Fill
-    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value "0"
-    [Wallpaper]::SystemParametersInfo(0x0014, 0, $wallpaperPath, 0x0001 -bor 0x0002) | Out-Null
-    Write-Host "  Wallpaper set to Captured Motion." -ForegroundColor DarkGray
+    # Get the actual logged-on user (not the elevated admin context)
+    $loggedOnUser = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName
+    if ($loggedOnUser) {
+        $userSid = (New-Object System.Security.Principal.NTAccount($loggedOnUser)).Translate(
+            [System.Security.Principal.SecurityIdentifier]).Value
+        $userRegPath = "Registry::HKEY_USERS\$userSid\Control Panel\Desktop"
+
+        if (Test-Path $userRegPath) {
+            Set-ItemProperty -Path $userRegPath -Name "WallPaper" -Value $wallpaperPath
+            Set-ItemProperty -Path $userRegPath -Name "WallpaperStyle" -Value "10"  # Fill
+            Set-ItemProperty -Path $userRegPath -Name "TileWallpaper" -Value "0"
+            Write-Host "  Wallpaper set to Captured Motion (applied after restart)." -ForegroundColor DarkGray
+        } else {
+            # Fallback: set via HKCU (works if not running elevated or same user)
+            Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallPaper" -Value $wallpaperPath
+            Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value "10"
+            Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value "0"
+            Write-Host "  Wallpaper set to Captured Motion." -ForegroundColor DarkGray
+        }
+    } else {
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallPaper" -Value $wallpaperPath
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value "10"
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value "0"
+        Write-Host "  Wallpaper set to Captured Motion." -ForegroundColor DarkGray
+    }
 } else {
     Write-Host "  Captured Motion wallpaper not found - keeping current." -ForegroundColor DarkGray
 }
 
-# Taskbar cleanup: remove Widgets, Chat, Search, Task View
-$taskbarKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-Set-ItemProperty -Path $taskbarKey -Name "ShowTaskViewButton" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-Set-ItemProperty -Path $taskbarKey -Name "TaskbarDa" -Value 0 -Type DWord -ErrorAction SilentlyContinue       # Widgets
-Set-ItemProperty -Path $taskbarKey -Name "TaskbarMn" -Value 0 -Type DWord -ErrorAction SilentlyContinue       # Chat
-Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "SearchboxTaskbarMode" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-Write-Host "  Taskbar cleaned up." -ForegroundColor DarkGray
+# Taskbar cleanup & tips: apply to actual logged-on user's registry hive
+# (elevated admin context uses a different HKCU, so we target HKU\<SID> directly)
+if (-not $loggedOnUser) { $loggedOnUser = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName }
+if ($loggedOnUser) {
+    try {
+        if (-not $userSid) {
+            $userSid = (New-Object System.Security.Principal.NTAccount($loggedOnUser)).Translate(
+                [System.Security.Principal.SecurityIdentifier]).Value
+        }
+        $userHKU = "Registry::HKEY_USERS\$userSid"
 
-# Disable Windows tips & suggestions notifications
-$contentDelivery = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-310093Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-338389Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-338393Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-353694Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-353696Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-Set-ItemProperty -Path $contentDelivery -Name "SoftLandingEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-Set-ItemProperty -Path $contentDelivery -Name "SystemPaneSuggestionsEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-Write-Host "  Windows tips & suggestions disabled." -ForegroundColor DarkGray
+        # Taskbar cleanup: remove Widgets, Chat, Search, Task View
+        $taskbarKey = "$userHKU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+        Set-ItemProperty -Path $taskbarKey -Name "ShowTaskViewButton" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $taskbarKey -Name "TaskbarDa" -Value 0 -Type DWord -ErrorAction SilentlyContinue       # Widgets
+        Set-ItemProperty -Path $taskbarKey -Name "TaskbarMn" -Value 0 -Type DWord -ErrorAction SilentlyContinue       # Chat
+        $searchKey = "$userHKU\Software\Microsoft\Windows\CurrentVersion\Search"
+        New-Item -Path $searchKey -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path $searchKey -Name "SearchboxTaskbarMode" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Write-Host "  Taskbar cleaned up." -ForegroundColor DarkGray
+
+        # Disable Windows tips & suggestions notifications
+        $contentDelivery = "$userHKU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+        Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-310093Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-338389Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-338393Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-353694Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-353696Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $contentDelivery -Name "SoftLandingEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $contentDelivery -Name "SystemPaneSuggestionsEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Write-Host "  Windows tips & suggestions disabled." -ForegroundColor DarkGray
+    } catch {
+        Write-Host "  Could not resolve user SID - falling back to HKCU." -ForegroundColor DarkGray
+        # Fallback to HKCU
+        $taskbarKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+        Set-ItemProperty -Path $taskbarKey -Name "ShowTaskViewButton" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $taskbarKey -Name "TaskbarDa" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $taskbarKey -Name "TaskbarMn" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "SearchboxTaskbarMode" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+    }
+} else {
+    # No logged on user detected, use HKCU as-is
+    $taskbarKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    Set-ItemProperty -Path $taskbarKey -Name "ShowTaskViewButton" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $taskbarKey -Name "TaskbarDa" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $taskbarKey -Name "TaskbarMn" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "SearchboxTaskbarMode" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+    Write-Host "  Taskbar cleaned up." -ForegroundColor DarkGray
+}
 
 Write-Host "  Desktop cleaned up." -ForegroundColor Green
 
