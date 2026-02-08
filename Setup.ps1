@@ -31,10 +31,12 @@ Write-Host "  VMInit - Windows 11 Lab VM Setup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+$steps = 7
+
 # ──────────────────────────────────────────────
 # 1. REMOVE BLOATWARE
 # ──────────────────────────────────────────────
-Write-Host "[1/4] Removing Windows 11 bloatware..." -ForegroundColor Yellow
+Write-Host "[1/$steps] Removing Windows 11 bloatware..." -ForegroundColor Yellow
 
 $bloatApps = @(
     "Clipchamp.Clipchamp"
@@ -100,7 +102,7 @@ Write-Host "  Bloatware removed." -ForegroundColor Green
 # ──────────────────────────────────────────────
 # 2. CLEAN UP MICROSOFT EDGE
 # ──────────────────────────────────────────────
-Write-Host "[2/4] Cleaning up Microsoft Edge..." -ForegroundColor Yellow
+Write-Host "[2/$steps] Cleaning up Microsoft Edge..." -ForegroundColor Yellow
 
 $edgePolicies = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
 New-Item -Path $edgePolicies -Force | Out-Null
@@ -138,9 +140,60 @@ Set-ItemProperty -Path $edgePolicies -Name "NewTabPageHideDefaultTopSites" -Valu
 Write-Host "  Edge cleaned up." -ForegroundColor Green
 
 # ──────────────────────────────────────────────
-# 3. INSTALL MICROSOFT 365 APPS (Office)
+# 3. CLEAN DESKTOP
 # ──────────────────────────────────────────────
-Write-Host "[3/4] Microsoft 365 Apps..." -ForegroundColor Yellow
+Write-Host "[3/$steps] Cleaning up desktop..." -ForegroundColor Yellow
+
+# Remove desktop shortcuts
+$desktopPaths = @(
+    [Environment]::GetFolderPath('Desktop'),
+    [Environment]::GetFolderPath('CommonDesktopDirectory')
+)
+foreach ($dp in $desktopPaths) {
+    Get-ChildItem -Path $dp -Filter "*.lnk" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+}
+Write-Host "  Desktop shortcuts removed." -ForegroundColor DarkGray
+
+# Set solid gray wallpaper
+Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+public class Wallpaper {
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+}
+"@
+# Set wallpaper to none (solid color)
+[Wallpaper]::SystemParametersInfo(0x0014, 0, "", 0x0001 -bor 0x0002) | Out-Null
+# Set desktop background color to neutral gray (RGB 88,88,88) via registry
+Set-ItemProperty -Path "HKCU:\Control Panel\Colors" -Name "Background" -Value "88 88 88"
+Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallPaper" -Value ""
+Write-Host "  Wallpaper set to solid gray." -ForegroundColor DarkGray
+
+# Taskbar cleanup: remove Widgets, Chat, Search, Task View
+$taskbarKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+Set-ItemProperty -Path $taskbarKey -Name "ShowTaskViewButton" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+Set-ItemProperty -Path $taskbarKey -Name "TaskbarDa" -Value 0 -Type DWord -ErrorAction SilentlyContinue       # Widgets
+Set-ItemProperty -Path $taskbarKey -Name "TaskbarMn" -Value 0 -Type DWord -ErrorAction SilentlyContinue       # Chat
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "SearchboxTaskbarMode" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+Write-Host "  Taskbar cleaned up." -ForegroundColor DarkGray
+
+# Disable Windows tips & suggestions notifications
+$contentDelivery = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-310093Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-338389Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-338393Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-353694Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+Set-ItemProperty -Path $contentDelivery -Name "SubscribedContent-353696Enabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+Set-ItemProperty -Path $contentDelivery -Name "SoftLandingEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+Set-ItemProperty -Path $contentDelivery -Name "SystemPaneSuggestionsEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+Write-Host "  Windows tips & suggestions disabled." -ForegroundColor DarkGray
+
+Write-Host "  Desktop cleaned up." -ForegroundColor Green
+
+# ──────────────────────────────────────────────
+# 4. INSTALL MICROSOFT 365 APPS (Office)
+# ──────────────────────────────────────────────
+Write-Host "[4/$steps] Microsoft 365 Apps..." -ForegroundColor Yellow
 
 $officeInstalled = Test-Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue
 if ($officeInstalled) {
@@ -168,9 +221,9 @@ if ($officeInstalled) {
 }
 
 # ──────────────────────────────────────────────
-# 4. INSTALL MICROSOFT TEAMS (new, v2.0)
+# 5. INSTALL MICROSOFT TEAMS (new, v2.0)
 # ──────────────────────────────────────────────
-Write-Host "[4/4] Microsoft Teams..." -ForegroundColor Yellow
+Write-Host "[5/$steps] Microsoft Teams..." -ForegroundColor Yellow
 
 $teamsInstalled = Get-AppxPackage -Name "MSTeams" -AllUsers -ErrorAction SilentlyContinue
 if ($teamsInstalled) {
@@ -190,8 +243,39 @@ if ($teamsInstalled) {
 }
 
 # ──────────────────────────────────────────────
-# CLEANUP
+# 6. INSTALL DEV TOOLS (winget)
 # ──────────────────────────────────────────────
+Write-Host "[6/$steps] Installing dev tools..." -ForegroundColor Yellow
+
+$wingetTools = @(
+    @{ Id = "Microsoft.VisualStudioCode"; Name = "VS Code" },
+    @{ Id = "Git.Git";                    Name = "Git" },
+    @{ Id = "Microsoft.PowerShell";       Name = "PowerShell 7" },
+    @{ Id = "Microsoft.WindowsTerminal";  Name = "Windows Terminal" }
+)
+
+foreach ($tool in $wingetTools) {
+    $installed = winget list --id $tool.Id --accept-source-agreements 2>&1 | Select-String $tool.Id
+    if ($installed) {
+        Write-Host "  $($tool.Name) already installed - skipping." -ForegroundColor DarkGray
+    } else {
+        Write-Host "  Installing $($tool.Name)..." -ForegroundColor DarkGray
+        winget install --id $tool.Id -e --silent --accept-package-agreements --accept-source-agreements | Out-Null
+        Write-Host "  $($tool.Name) installed." -ForegroundColor DarkGray
+    }
+}
+
+Write-Host "  Dev tools ready." -ForegroundColor Green
+
+# ──────────────────────────────────────────────
+# 7. REFRESH EXPLORER & CLEANUP
+# ──────────────────────────────────────────────
+Write-Host "[7/$steps] Finishing up..." -ForegroundColor Yellow
+
+# Restart Explorer to apply taskbar & desktop changes
+Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+
 Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
