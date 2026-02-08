@@ -154,43 +154,33 @@ foreach ($dp in $desktopPaths) {
 }
 Write-Host "  Desktop shortcuts removed." -ForegroundColor DarkGray
 
-# Set wallpaper to Windows 11 "Captured Motion" (built-in, gray tones)
-$wallpaperCandidates = @(
-    "$env:SystemRoot\Web\Wallpaper\ThemeD\img32.jpg",
-    "$env:SystemRoot\Web\Wallpaper\ThemeD\img33.jpg",
-    "$env:SystemRoot\Web\Wallpaper\ThemeD\img34.jpg",
-    "$env:SystemRoot\Web\Wallpaper\ThemeD\img35.jpg"
-)
-$wallpaperPath = $wallpaperCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-if ($wallpaperPath) {
-    # Get the actual logged-on user (not the elevated admin context)
-    $loggedOnUser = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName
-    if ($loggedOnUser) {
+# Set wallpaper — download from repo to guarantee availability
+$wallpaperDest = "$env:SystemRoot\Web\Wallpaper\VMInit.jpg"
+$wallpaperUrl = "https://raw.githubusercontent.com/jenssgb/VMInit/master/wallpaper.jpg"
+Invoke-WebRequest -Uri $wallpaperUrl -OutFile $wallpaperDest -UseBasicParsing
+Write-Host "  Wallpaper downloaded." -ForegroundColor DarkGray
+
+# Get the actual logged-on user (not the elevated admin context)
+$loggedOnUser = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName
+if ($loggedOnUser) {
+    try {
         $userSid = (New-Object System.Security.Principal.NTAccount($loggedOnUser)).Translate(
             [System.Security.Principal.SecurityIdentifier]).Value
         $userRegPath = "Registry::HKEY_USERS\$userSid\Control Panel\Desktop"
-
-        if (Test-Path $userRegPath) {
-            Set-ItemProperty -Path $userRegPath -Name "WallPaper" -Value $wallpaperPath
-            Set-ItemProperty -Path $userRegPath -Name "WallpaperStyle" -Value "10"  # Fill
-            Set-ItemProperty -Path $userRegPath -Name "TileWallpaper" -Value "0"
-            Write-Host "  Wallpaper set to Captured Motion (applied after restart)." -ForegroundColor DarkGray
-        } else {
-            # Fallback: set via HKCU (works if not running elevated or same user)
-            Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallPaper" -Value $wallpaperPath
-            Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value "10"
-            Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value "0"
-            Write-Host "  Wallpaper set to Captured Motion." -ForegroundColor DarkGray
-        }
-    } else {
-        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallPaper" -Value $wallpaperPath
+        Set-ItemProperty -Path $userRegPath -Name "WallPaper" -Value $wallpaperDest
+        Set-ItemProperty -Path $userRegPath -Name "WallpaperStyle" -Value "10"  # Fill
+        Set-ItemProperty -Path $userRegPath -Name "TileWallpaper" -Value "0"
+    } catch {
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallPaper" -Value $wallpaperDest
         Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value "10"
         Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value "0"
-        Write-Host "  Wallpaper set to Captured Motion." -ForegroundColor DarkGray
     }
 } else {
-    Write-Host "  Captured Motion wallpaper not found - keeping current." -ForegroundColor DarkGray
+    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallPaper" -Value $wallpaperDest
+    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value "10"
+    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value "0"
 }
+Write-Host "  Wallpaper set (applied after restart)." -ForegroundColor DarkGray
 
 # Taskbar cleanup & tips: apply to actual logged-on user's registry hive
 # (elevated admin context uses a different HKCU, so we target HKU\<SID> directly)
