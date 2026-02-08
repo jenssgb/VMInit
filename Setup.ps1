@@ -31,7 +31,7 @@ Write-Host "  VMInit - Windows 11 Lab VM Setup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-$steps = 9
+$steps = 8
 
 # ──────────────────────────────────────────────
 # 1. REMOVE BLOATWARE
@@ -294,8 +294,8 @@ Write-Host "[6/$steps] Creating desktop shortcuts..." -ForegroundColor Yellow
 $publicDesktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
 $WshShell = New-Object -ComObject WScript.Shell
 
+# Classic Office apps (Word, Excel)
 $shortcuts = @(
-    @{ Name = "Outlook";  Target = "$env:ProgramFiles\Microsoft Office\root\Office16\OUTLOOK.EXE" },
     @{ Name = "Word";     Target = "$env:ProgramFiles\Microsoft Office\root\Office16\WINWORD.EXE" },
     @{ Name = "Excel";    Target = "$env:ProgramFiles\Microsoft Office\root\Office16\EXCEL.EXE" }
 )
@@ -307,39 +307,86 @@ foreach ($s in $shortcuts) {
         $lnk.Save()
         Write-Host "  $($s.Name) shortcut created." -ForegroundColor DarkGray
     } else {
-        Write-Host "  $($s.Name) not found at $($s.Target) - skipping shortcut." -ForegroundColor DarkGray
+        Write-Host "  $($s.Name) not found - skipping shortcut." -ForegroundColor DarkGray
     }
 }
 
-# Teams shortcut: find ms-teams.exe and use its embedded icon
-$teamsExePaths = @(
-    "$env:LOCALAPPDATA\Microsoft\WindowsApps\ms-teams.exe",
-    "$env:ProgramFiles\WindowsApps\MSTeams_*\ms-teams.exe",
-    "${env:LOCALAPPDATA}\Microsoft\Teams\current\Teams.exe"
+# MSIX apps (New Outlook, Teams) — create shortcuts via shell:AppsFolder
+# This gives us the correct icons automatically
+$msixApps = @(
+    @{ Name = "Outlook";          AUMID = "Microsoft.OutlookForWindows_8wekyb3d8bbwe!Microsoft.OutlookforWindows" },
+    @{ Name = "Microsoft Teams";  AUMID = "MSTeams_8wekyb3d8bbwe!MSTeams" }
 )
-$teamsExe = $null
-foreach ($tp in $teamsExePaths) {
-    $found = Get-Item $tp -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($found) { $teamsExe = $found.FullName; break }
+
+# Helper: Create a proper shell link to a MSIX app with its real icon
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
+
+public class ShellLink {
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+    private class ShellLinkCoClass { }
+
+    [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellLinkW {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszFile, int cch, IntPtr pfd, uint fFlags);
+        void GetIDList(out IntPtr ppidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszName, int cch);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszDir, int cch);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string pszDir);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszArgs, int cch);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string pszArgs);
+        void GetHotkey(out ushort pwHotkey);
+        void SetHotkey(ushort wHotkey);
+        void GetShowCmd(out int piShowCmd);
+        void SetShowCmd(int iShowCmd);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszIconPath, int cch, out int piIcon);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string pszIconPath, int iIcon);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pszPathRel, uint dwReserved);
+        void Resolve(IntPtr hwnd, uint fFlags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string pszFile);
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHCreateItemFromParsingName(string pszPath, IntPtr pbc, ref Guid riid, out IntPtr ppv);
+
+    [DllImport("shell32.dll")]
+    private static extern int SHGetIDListFromObject(IntPtr punk, out IntPtr ppidl);
+
+    [DllImport("ole32.dll")]
+    private static extern void CoTaskMemFree(IntPtr pv);
+
+    public static void CreateAppShortcut(string lnkPath, string aumid) {
+        var link = (IShellLinkW)new ShellLinkCoClass();
+        // Parse "shell:AppsFolder\<AUMID>" to a PIDL
+        string target = "shell:AppsFolder\\" + aumid;
+        Guid IID_IShellItem2 = new Guid("7E9FB0D3-919F-4307-AB2E-9B1860310C93");
+        IntPtr shellItem;
+        int hr = SHCreateItemFromParsingName(target, IntPtr.Zero, ref IID_IShellItem2, out shellItem);
+        if (hr != 0) throw new Exception("Failed to resolve AUMID: " + aumid);
+        IntPtr pidl;
+        hr = SHGetIDListFromObject(shellItem, out pidl);
+        Marshal.Release(shellItem);
+        if (hr != 0) throw new Exception("Failed to get PIDL for: " + aumid);
+        link.SetIDList(pidl);
+        CoTaskMemFree(pidl);
+        // Save
+        ((IPersistFile)link).Save(lnkPath, true);
+    }
 }
-if (-not $teamsExe) {
-    # Search more broadly
-    $teamsExe = (Get-ChildItem "$env:ProgramFiles\WindowsApps" -Filter "ms-teams.exe" -Recurse -ErrorAction SilentlyContinue |
-        Select-Object -First 1).FullName
-}
-if ($teamsExe) {
-    $lnk = $WshShell.CreateShortcut("$publicDesktop\Microsoft Teams.lnk")
-    $lnk.TargetPath = $teamsExe
-    $lnk.IconLocation = "$teamsExe,0"
-    $lnk.Save()
-    Write-Host "  Teams shortcut created." -ForegroundColor DarkGray
-} else {
-    # Last resort: use URI protocol (always works, icon from shell)
-    $lnk = $WshShell.CreateShortcut("$publicDesktop\Microsoft Teams.lnk")
-    $lnk.TargetPath = "msteams:"
-    $lnk.IconLocation = "$env:SystemRoot\System32\shell32.dll,44"
-    $lnk.Save()
-    Write-Host "  Teams shortcut created (protocol handler)." -ForegroundColor DarkGray
+"@
+
+foreach ($app in $msixApps) {
+    try {
+        [ShellLink]::CreateAppShortcut("$publicDesktop\$($app.Name).lnk", $app.AUMID)
+        Write-Host "  $($app.Name) shortcut created (with icon)." -ForegroundColor DarkGray
+    } catch {
+        Write-Host "  $($app.Name) shortcut failed: $($_.Exception.Message)" -ForegroundColor DarkGray
+    }
 }
 
 # OneDrive shortcut (usually already on desktop, but ensure it)
@@ -355,23 +402,9 @@ if (Test-Path $oneDrivePath) {
 Write-Host "  Desktop shortcuts ready." -ForegroundColor Green
 
 # ──────────────────────────────────────────────
-# 7. CREATE M365 ACCOUNT ONBOARDING SHORTCUT
+# 7. INSTALL DEV TOOLS (winget)
 # ──────────────────────────────────────────────
-Write-Host "[7/$steps] Creating account onboarding shortcut..." -ForegroundColor Yellow
-
-# Create a shortcut that opens "Add Work/School Account" in Settings
-# This lets the user sign in with their M365 demo tenant for SSO across all apps
-$accountLink = $WshShell.CreateShortcut("$publicDesktop\M365 Account anmelden.lnk")
-$accountLink.TargetPath = "ms-settings:workplace"
-$accountLink.Description = "M365 Demo-Account verbinden (SSO fuer Office, Teams, OneDrive)"
-$accountLink.IconLocation = "$env:SystemRoot\System32\shell32.dll,44"
-$accountLink.Save()
-Write-Host "  'M365 Account anmelden' shortcut created on desktop." -ForegroundColor Green
-
-# ──────────────────────────────────────────────
-# 8. INSTALL DEV TOOLS (winget)
-# ──────────────────────────────────────────────
-Write-Host "[8/$steps] Installing dev tools..." -ForegroundColor Yellow
+Write-Host "[7/$steps] Installing dev tools..." -ForegroundColor Yellow
 
 $wingetTools = @(
     @{ Id = "Microsoft.VisualStudioCode"; Name = "VS Code" },
@@ -394,9 +427,9 @@ foreach ($tool in $wingetTools) {
 Write-Host "  Dev tools ready." -ForegroundColor Green
 
 # ──────────────────────────────────────────────
-# 9. REFRESH EXPLORER & CLEANUP
+# 8. REFRESH EXPLORER & CLEANUP
 # ──────────────────────────────────────────────
-Write-Host "[9/$steps] Finishing up..." -ForegroundColor Yellow
+Write-Host "[8/$steps] Finishing up..." -ForegroundColor Yellow
 
 # Restart Explorer to apply taskbar & desktop changes
 Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
