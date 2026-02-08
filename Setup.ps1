@@ -137,6 +137,17 @@ Set-ItemProperty -Path $edgePolicies -Name "ShowMicrosoftRewards" -Value 0 -Type
 Set-ItemProperty -Path $edgePolicies -Name "NewTabPageAllowedBackgroundTypes" -Value 3 -Type DWord
 Set-ItemProperty -Path $edgePolicies -Name "NewTabPageHideDefaultTopSites" -Value 1 -Type DWord
 
+# Always show favorites bar
+Set-ItemProperty -Path $edgePolicies -Name "FavoritesBarEnabled" -Value 1 -Type DWord
+
+# Add M365 to managed favorites bar via policy
+$managedFavorites = "HKLM:\SOFTWARE\Policies\Microsoft\Edge\ManagedFavorites"
+New-Item -Path $managedFavorites -Force | Out-Null
+# ManagedFavorites policy uses a JSON-formatted string
+$favJson = '[{"toplevel_name": ""},{"name": "Microsoft 365", "url": "https://m365.cloud.microsoft/"}]'
+Set-ItemProperty -Path $edgePolicies -Name "ManagedFavorites" -Value $favJson -Type String
+Write-Host "  Favorites bar enabled with M365 link." -ForegroundColor DarkGray
+
 Write-Host "  Edge cleaned up." -ForegroundColor Green
 
 # ──────────────────────────────────────────────
