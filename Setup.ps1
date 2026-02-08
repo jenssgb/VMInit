@@ -163,10 +163,10 @@ public class Wallpaper {
 }
 "@
 $wallpaperCandidates = @(
-    "$env:SystemRoot\Web\Wallpaper\ThemeD\img30.jpg",
-    "$env:SystemRoot\Web\Wallpaper\ThemeD\img31.jpg",
     "$env:SystemRoot\Web\Wallpaper\ThemeD\img32.jpg",
-    "$env:SystemRoot\Web\Wallpaper\ThemeD\img33.jpg"
+    "$env:SystemRoot\Web\Wallpaper\ThemeD\img33.jpg",
+    "$env:SystemRoot\Web\Wallpaper\ThemeD\img34.jpg",
+    "$env:SystemRoot\Web\Wallpaper\ThemeD\img35.jpg"
 )
 $wallpaperPath = $wallpaperCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($wallpaperPath) {
@@ -293,5 +293,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  VMInit completed!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Please restart the VM to apply all changes." -ForegroundColor Yellow
+Write-Host "  A restart is required to apply all changes." -ForegroundColor Yellow
 Write-Host ""
+Read-Host "  Press ENTER to restart now"
+Restart-Computer -Force
