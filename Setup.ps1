@@ -140,43 +140,53 @@ Write-Host "  Edge cleaned up." -ForegroundColor Green
 # ──────────────────────────────────────────────
 # 3. INSTALL MICROSOFT 365 APPS (Office)
 # ──────────────────────────────────────────────
-Write-Host "[3/4] Installing Microsoft 365 Apps..." -ForegroundColor Yellow
+Write-Host "[3/4] Microsoft 365 Apps..." -ForegroundColor Yellow
 
-# Download ODT
-$odtExe = "$tempDir\ODTSetup.exe"
-$odtUrl = "https://officecdn.microsoft.com/pr/wsus/setup.exe"
-Write-Host "  Downloading Office Deployment Tool..." -ForegroundColor DarkGray
-Invoke-WebRequest -Uri $odtUrl -OutFile $odtExe -UseBasicParsing
-
-# Download config XML from the repo
-$configXml = "$tempDir\Office365.xml"
-$configUrl = "https://raw.githubusercontent.com/jenssgb/VMInit/master/Office365.xml"
-Invoke-WebRequest -Uri $configUrl -OutFile $configXml -UseBasicParsing
-
-# Run ODT - download and install
-Write-Host "  Downloading and installing Office (this takes a few minutes)..." -ForegroundColor DarkGray
-$odtProcess = Start-Process -FilePath $odtExe -ArgumentList "/configure `"$configXml`"" -Wait -PassThru -NoNewWindow
-if ($odtProcess.ExitCode -eq 0) {
-    Write-Host "  Microsoft 365 Apps installed." -ForegroundColor Green
+$officeInstalled = Test-Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue
+if ($officeInstalled) {
+    Write-Host "  Already installed - skipping." -ForegroundColor Green
 } else {
-    Write-Host "  Office installation finished with exit code: $($odtProcess.ExitCode)" -ForegroundColor Red
+    # Download ODT
+    $odtExe = "$tempDir\ODTSetup.exe"
+    $odtUrl = "https://officecdn.microsoft.com/pr/wsus/setup.exe"
+    Write-Host "  Downloading Office Deployment Tool..." -ForegroundColor DarkGray
+    Invoke-WebRequest -Uri $odtUrl -OutFile $odtExe -UseBasicParsing
+
+    # Download config XML from the repo
+    $configXml = "$tempDir\Office365.xml"
+    $configUrl = "https://raw.githubusercontent.com/jenssgb/VMInit/master/Office365.xml"
+    Invoke-WebRequest -Uri $configUrl -OutFile $configXml -UseBasicParsing
+
+    # Run ODT - download and install
+    Write-Host "  Downloading and installing Office (this takes a few minutes)..." -ForegroundColor DarkGray
+    $odtProcess = Start-Process -FilePath $odtExe -ArgumentList "/configure `"$configXml`"" -Wait -PassThru -NoNewWindow
+    if ($odtProcess.ExitCode -eq 0) {
+        Write-Host "  Microsoft 365 Apps installed." -ForegroundColor Green
+    } else {
+        Write-Host "  Office installation finished with exit code: $($odtProcess.ExitCode)" -ForegroundColor Red
+    }
 }
 
 # ──────────────────────────────────────────────
 # 4. INSTALL MICROSOFT TEAMS (new, v2.0)
 # ──────────────────────────────────────────────
-Write-Host "[4/4] Installing Microsoft Teams..." -ForegroundColor Yellow
+Write-Host "[4/4] Microsoft Teams..." -ForegroundColor Yellow
 
-$teamsBootstrapper = "$tempDir\teamsbootstrapper.exe"
-$teamsUrl = "https://go.microsoft.com/fwlink/?linkid=2243204&clcid=0x409"
-Write-Host "  Downloading Teams bootstrapper..." -ForegroundColor DarkGray
-Invoke-WebRequest -Uri $teamsUrl -OutFile $teamsBootstrapper -UseBasicParsing
-
-$teamsProcess = Start-Process -FilePath $teamsBootstrapper -ArgumentList "-p" -Wait -PassThru -NoNewWindow
-if ($teamsProcess.ExitCode -eq 0) {
-    Write-Host "  Microsoft Teams installed." -ForegroundColor Green
+$teamsInstalled = Get-AppxPackage -Name "MSTeams" -AllUsers -ErrorAction SilentlyContinue
+if ($teamsInstalled) {
+    Write-Host "  Already installed - skipping." -ForegroundColor Green
 } else {
-    Write-Host "  Teams installation finished with exit code: $($teamsProcess.ExitCode)" -ForegroundColor Red
+    $teamsBootstrapper = "$tempDir\teamsbootstrapper.exe"
+    $teamsUrl = "https://go.microsoft.com/fwlink/?linkid=2243204&clcid=0x409"
+    Write-Host "  Downloading Teams bootstrapper..." -ForegroundColor DarkGray
+    Invoke-WebRequest -Uri $teamsUrl -OutFile $teamsBootstrapper -UseBasicParsing
+
+    $teamsProcess = Start-Process -FilePath $teamsBootstrapper -ArgumentList "-p" -Wait -PassThru -NoNewWindow
+    if ($teamsProcess.ExitCode -eq 0) {
+        Write-Host "  Microsoft Teams installed." -ForegroundColor Green
+    } else {
+        Write-Host "  Teams installation finished with exit code: $($teamsProcess.ExitCode)" -ForegroundColor Red
+    }
 }
 
 # ──────────────────────────────────────────────
