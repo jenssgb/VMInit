@@ -154,7 +154,7 @@ foreach ($dp in $desktopPaths) {
 }
 Write-Host "  Desktop shortcuts removed." -ForegroundColor DarkGray
 
-# Set solid gray wallpaper
+# Set wallpaper to Windows 11 "Captured Motion" (built-in, gray tones)
 Add-Type -TypeDefinition @"
 using System.Runtime.InteropServices;
 public class Wallpaper {
@@ -162,12 +162,22 @@ public class Wallpaper {
     public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
 }
 "@
-# Set wallpaper to none (solid color)
-[Wallpaper]::SystemParametersInfo(0x0014, 0, "", 0x0001 -bor 0x0002) | Out-Null
-# Set desktop background color to neutral gray (RGB 88,88,88) via registry
-Set-ItemProperty -Path "HKCU:\Control Panel\Colors" -Name "Background" -Value "88 88 88"
-Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallPaper" -Value ""
-Write-Host "  Wallpaper set to solid gray." -ForegroundColor DarkGray
+$wallpaperCandidates = @(
+    "$env:SystemRoot\Web\Wallpaper\ThemeD\img30.jpg",
+    "$env:SystemRoot\Web\Wallpaper\ThemeD\img31.jpg",
+    "$env:SystemRoot\Web\Wallpaper\ThemeD\img32.jpg",
+    "$env:SystemRoot\Web\Wallpaper\ThemeD\img33.jpg"
+)
+$wallpaperPath = $wallpaperCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($wallpaperPath) {
+    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallPaper" -Value $wallpaperPath
+    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value "10"  # Fill
+    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value "0"
+    [Wallpaper]::SystemParametersInfo(0x0014, 0, $wallpaperPath, 0x0001 -bor 0x0002) | Out-Null
+    Write-Host "  Wallpaper set to Captured Motion." -ForegroundColor DarkGray
+} else {
+    Write-Host "  Captured Motion wallpaper not found - keeping current." -ForegroundColor DarkGray
+}
 
 # Taskbar cleanup: remove Widgets, Chat, Search, Task View
 $taskbarKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
