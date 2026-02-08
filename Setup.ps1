@@ -31,7 +31,7 @@ Write-Host "  VMInit - Windows 11 Lab VM Setup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-$steps = 7
+$steps = 9
 
 # ──────────────────────────────────────────────
 # 1. REMOVE BLOATWARE
@@ -287,9 +287,61 @@ if ($teamsInstalled) {
 }
 
 # ──────────────────────────────────────────────
-# 6. INSTALL DEV TOOLS (winget)
+# 6. CREATE DESKTOP SHORTCUTS
 # ──────────────────────────────────────────────
-Write-Host "[6/$steps] Installing dev tools..." -ForegroundColor Yellow
+Write-Host "[6/$steps] Creating desktop shortcuts..." -ForegroundColor Yellow
+
+$publicDesktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
+$WshShell = New-Object -ComObject WScript.Shell
+
+$shortcuts = @(
+    @{ Name = "Outlook";  Target = "$env:ProgramFiles\Microsoft Office\root\Office16\OUTLOOK.EXE" },
+    @{ Name = "Word";     Target = "$env:ProgramFiles\Microsoft Office\root\Office16\WINWORD.EXE" },
+    @{ Name = "Excel";    Target = "$env:ProgramFiles\Microsoft Office\root\Office16\EXCEL.EXE" },
+    @{ Name = "Teams";    Target = "$env:LOCALAPPDATA\Microsoft\WindowsApps\ms-teams.exe" }
+)
+
+foreach ($s in $shortcuts) {
+    if (Test-Path $s.Target) {
+        $lnk = $WshShell.CreateShortcut("$publicDesktop\$($s.Name).lnk")
+        $lnk.TargetPath = $s.Target
+        $lnk.Save()
+        Write-Host "  $($s.Name) shortcut created." -ForegroundColor DarkGray
+    } else {
+        Write-Host "  $($s.Name) not found at $($s.Target) - skipping shortcut." -ForegroundColor DarkGray
+    }
+}
+
+# OneDrive shortcut (usually already on desktop, but ensure it)
+$oneDrivePath = "$env:ProgramFiles\Microsoft OneDrive\OneDrive.exe"
+if (-not (Test-Path $oneDrivePath)) { $oneDrivePath = "${env:LOCALAPPDATA}\Microsoft\OneDrive\OneDrive.exe" }
+if (Test-Path $oneDrivePath) {
+    $lnk = $WshShell.CreateShortcut("$publicDesktop\OneDrive.lnk")
+    $lnk.TargetPath = $oneDrivePath
+    $lnk.Save()
+    Write-Host "  OneDrive shortcut created." -ForegroundColor DarkGray
+}
+
+Write-Host "  Desktop shortcuts ready." -ForegroundColor Green
+
+# ──────────────────────────────────────────────
+# 7. CREATE M365 ACCOUNT ONBOARDING SHORTCUT
+# ──────────────────────────────────────────────
+Write-Host "[7/$steps] Creating account onboarding shortcut..." -ForegroundColor Yellow
+
+# Create a shortcut that opens "Add Work/School Account" in Settings
+# This lets the user sign in with their M365 demo tenant for SSO across all apps
+$accountLink = $WshShell.CreateShortcut("$publicDesktop\M365 Account anmelden.lnk")
+$accountLink.TargetPath = "ms-settings:workplace"
+$accountLink.Description = "M365 Demo-Account verbinden (SSO fuer Office, Teams, OneDrive)"
+$accountLink.IconLocation = "$env:SystemRoot\System32\shell32.dll,44"
+$accountLink.Save()
+Write-Host "  'M365 Account anmelden' shortcut created on desktop." -ForegroundColor Green
+
+# ──────────────────────────────────────────────
+# 8. INSTALL DEV TOOLS (winget)
+# ──────────────────────────────────────────────
+Write-Host "[8/$steps] Installing dev tools..." -ForegroundColor Yellow
 
 $wingetTools = @(
     @{ Id = "Microsoft.VisualStudioCode"; Name = "VS Code" },
@@ -312,9 +364,9 @@ foreach ($tool in $wingetTools) {
 Write-Host "  Dev tools ready." -ForegroundColor Green
 
 # ──────────────────────────────────────────────
-# 7. REFRESH EXPLORER & CLEANUP
+# 9. REFRESH EXPLORER & CLEANUP
 # ──────────────────────────────────────────────
-Write-Host "[7/$steps] Finishing up..." -ForegroundColor Yellow
+Write-Host "[9/$steps] Finishing up..." -ForegroundColor Yellow
 
 # Restart Explorer to apply taskbar & desktop changes
 Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
