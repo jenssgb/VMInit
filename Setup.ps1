@@ -48,7 +48,7 @@ $bloatApps = @(
     "Microsoft.GamingApp"
     "Microsoft.GetHelp"
     "Microsoft.Getstarted"
-    "Microsoft.MicrosoftOfficeHub"
+    # "Microsoft.MicrosoftOfficeHub"  -- kept: this is M365 Copilot
     "Microsoft.MicrosoftSolitaireCollection"
     "Microsoft.MicrosoftStickyNotes"
     "Microsoft.People"
@@ -80,7 +80,7 @@ $bloatApps = @(
     "Facebook.Facebook"
     "9E2F88E3.Twitter"
     "AmazonVideo.PrimeVideo"
-    "Microsoft.OutlookForWindows"
+    # "Microsoft.OutlookForWindows"  -- kept: this is New Outlook
 )
 
 foreach ($app in $bloatApps) {
@@ -314,8 +314,9 @@ foreach ($s in $shortcuts) {
 # MSIX apps (New Outlook, Teams) — create shortcuts via shell:AppsFolder
 # This gives us the correct icons automatically
 $msixApps = @(
-    @{ Name = "Outlook";          AUMID = "Microsoft.OutlookForWindows_8wekyb3d8bbwe!Microsoft.OutlookforWindows" },
-    @{ Name = "Microsoft Teams";  AUMID = "MSTeams_8wekyb3d8bbwe!MSTeams" }
+    @{ Name = "Outlook";           AUMID = "Microsoft.OutlookForWindows_8wekyb3d8bbwe!Microsoft.OutlookforWindows" },
+    @{ Name = "Microsoft Teams";   AUMID = "MSTeams_8wekyb3d8bbwe!MSTeams" },
+    @{ Name = "Microsoft 365 Copilot"; AUMID = "Microsoft.MicrosoftOfficeHub_8wekyb3d8bbwe!Microsoft.MicrosoftOfficeHub" }
 )
 
 # Helper: Create a proper shell link to a MSIX app with its real icon
